@@ -43,13 +43,14 @@ public class CustomerServiceImpl implements CustomerService {
             throw new DuplicateResourceException("Phone number already registered: " + request.getPhone());
         }
 
-        if (request.getEmail() != null && !request.getEmail().isBlank()
-                && customerRepository.existsByEmail(request.getEmail())) {
-            throw new DuplicateResourceException("Email already registered: " + request.getEmail());
+        String email = normalizeEmail(request.getEmail());
+        if (email != null && customerRepository.existsByEmail(email)) {
+            throw new DuplicateResourceException("Email already registered: " + email);
         }
 
         String customerCode = request.getCustomerCode();
         if (customerCode != null && !customerCode.isBlank()) {
+            customerCode = customerCode.trim();
             if (customerRepository.existsByCustomerCode(customerCode)) {
                 throw new DuplicateResourceException("Customer code already exists: " + customerCode);
             }
@@ -59,11 +60,11 @@ public class CustomerServiceImpl implements CustomerService {
 
         Customer customer = Customer.builder()
                 .customerCode(customerCode)
-                .fullName(request.getFullName())
-                .phone(request.getPhone())
-                .email(request.getEmail())
+                .fullName(request.getFullName() != null ? request.getFullName().trim() : null)
+                .phone(request.getPhone() != null ? request.getPhone().trim() : null)
+                .email(email)
                 .dateOfBirth(request.getDateOfBirth())
-                .gender(request.getGender())
+                .gender(request.getGender() != null && !request.getGender().isBlank() ? request.getGender().trim() : null)
                 .build();
 
         Customer savedCustomer = customerRepository.save(customer);
@@ -115,23 +116,26 @@ public class CustomerServiceImpl implements CustomerService {
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + id));
 
         if (request.getPhone() != null && !request.getPhone().isBlank()
-                && !request.getPhone().equals(customer.getPhone())) {
-            if (customerRepository.existsByPhone(request.getPhone())) {
-                throw new DuplicateResourceException("Phone number already registered: " + request.getPhone());
+                && !request.getPhone().trim().equals(customer.getPhone())) {
+            String newPhone = request.getPhone().trim();
+            if (customerRepository.existsByPhone(newPhone)) {
+                throw new DuplicateResourceException("Phone number already registered: " + newPhone);
             }
-            customer.setPhone(request.getPhone());
+            customer.setPhone(newPhone);
         }
 
-        if (request.getEmail() != null && !request.getEmail().isBlank()
-                && !request.getEmail().equals(customer.getEmail())) {
-            if (customerRepository.existsByEmail(request.getEmail())) {
-                throw new DuplicateResourceException("Email already registered: " + request.getEmail());
+        if (request.getEmail() != null) {
+            String sanitizedEmail = normalizeEmail(request.getEmail());
+            if (sanitizedEmail != null && !sanitizedEmail.equalsIgnoreCase(customer.getEmail())) {
+                if (customerRepository.existsByEmail(sanitizedEmail)) {
+                    throw new DuplicateResourceException("Email already registered: " + sanitizedEmail);
+                }
             }
-            customer.setEmail(request.getEmail());
+            customer.setEmail(sanitizedEmail);
         }
 
         if (request.getFullName() != null && !request.getFullName().isBlank()) {
-            customer.setFullName(request.getFullName());
+            customer.setFullName(request.getFullName().trim());
         }
 
         if (request.getDateOfBirth() != null) {
@@ -139,7 +143,7 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         if (request.getGender() != null) {
-            customer.setGender(request.getGender());
+            customer.setGender(request.getGender().isBlank() ? null : request.getGender().trim());
         }
 
         Customer updatedCustomer = customerRepository.save(customer);
@@ -276,6 +280,13 @@ public class CustomerServiceImpl implements CustomerService {
             code = "CUST-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         } while (customerRepository.existsByCustomerCode(code));
         return code;
+    }
+
+    private String normalizeEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return null;
+        }
+        return email.trim();
     }
 
     private CustomerResponse mapToCustomerResponse(Customer customer) {
