@@ -24,18 +24,31 @@ public class StoreServiceImpl implements StoreService {
     @Override
     @Transactional
     public StoreResponse createStore(CreateStoreRequest request) {
-        if (storeRepository.existsByStoreCode(request.getStoreCode())) {
-            throw new DuplicateResourceException("Store code already exists: " + request.getStoreCode());
+        String storeCode = request.getStoreCode();
+        if (storeCode != null && !storeCode.isBlank()) {
+            if (storeRepository.existsByStoreCode(storeCode)) {
+                throw new DuplicateResourceException("Store code already exists: " + storeCode);
+            }
+        } else {
+            storeCode = generateUniqueStoreCode();
         }
 
         Store store = Store.builder()
-                .storeCode(request.getStoreCode())
+                .storeCode(storeCode)
                 .storeName(request.getStoreName())
                 .address(request.getAddress())
                 .build();
 
         Store savedStore = storeRepository.save(store);
         return mapToResponse(savedStore);
+    }
+
+    private String generateUniqueStoreCode() {
+        String code;
+        do {
+            code = "STORE-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        } while (storeRepository.existsByStoreCode(code));
+        return code;
     }
 
     @Override

@@ -26,59 +26,74 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class MockPosController {
 
-    private final StoreRepository storeRepository;
-    private final CustomerRepository customerRepository;
-    private final TransactionService transactionService;
-    private final LoyaltyAccountRepository loyaltyAccountRepository;
+        private final StoreRepository storeRepository;
+        private final CustomerRepository customerRepository;
+        private final TransactionService transactionService;
+        private final LoyaltyAccountRepository loyaltyAccountRepository;
 
-    /**
-     * Mock POS Integration API - Simulates external POS devices submitting sales data to the Central Platform.
-     * Guarantees BR-03 (Points only earned on SUCCESS) and BR-05 (Idempotency duplicate prevention).
-     */
-    @PostMapping("/mock-checkout")
-    public ResponseEntity<ApiResponse<MockPosCheckoutResponse>> mockPosCheckout(
-            @Valid @RequestBody MockPosCheckoutRequest request) {
+        /**
+         * Mock POS Integration API - Simulates external POS devices submitting sales
+         * data to the Central Platform.
+         * Guarantees BR-03 (Points only earned on SUCCESS) and BR-05 (Idempotency
+         * duplicate prevention).
+         */
+        @PostMapping("/mock-checkout")
+        public ResponseEntity<ApiResponse<MockPosCheckoutResponse>> mockPosCheckout(
+                        @Valid @RequestBody MockPosCheckoutRequest request) {
 
-        Store store = storeRepository.findByStoreCode(request.getStoreCode())
-                .orElseThrow(() -> new ResourceNotFoundException("Store not found with code: " + request.getStoreCode()));
+                Store store = storeRepository.findByStoreCode(request.getStoreCode())
+                                .orElseThrow(() -> new ResourceNotFoundException(
+                                                "Store not found with code: " + request.getStoreCode()));
 
-        Customer customer = customerRepository.findByPhoneOrCustomerCode(request.getCustomerPhoneOrCode())
-                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with phone/code: " + request.getCustomerPhoneOrCode()));
+                Customer customer = null;
+                if (request.getCustomerPhoneOrCode() != null && !request.getCustomerPhoneOrCode().isBlank()) {
+                        customer = customerRepository.findByPhoneOrCustomerCode(request.getCustomerPhoneOrCode().trim())
+                                        .orElseThrow(() -> new ResourceNotFoundException("Customer not found with phone/code: "
+                                                        + request.getCustomerPhoneOrCode()));
+                }
 
-        CreateTransactionRequest createTxRequest = CreateTransactionRequest.builder()
-                .transactionCode(request.getPosTransactionId())
-                .customerId(customer.getId())
-                .storeId(store.getId())
-                .transactionDate(LocalDateTime.now())
-                .status(TransactionStatus.SUCCESS)
-                .items(request.getItems())
-                .build();
+                CreateTransactionRequest createTxRequest = CreateTransactionRequest.builder()
+                                .transactionCode(request.getPosTransactionId())
+                                .customerId(customer != null ? customer.getId() : null)
+                                .storeId(store.getId())
+                                .pointsToRedeem(request.getPointsToRedeem())
+                                .transactionDate(LocalDateTime.now())
+                                .status(TransactionStatus.SUCCESS)
+                                .items(request.getItems())
+                                .build();
 
-        TransactionResponse txResponse = transactionService.createTransaction(createTxRequest);
+                TransactionResponse txResponse = transactionService.createTransaction(createTxRequest);
 
-        Long currentBalance = loyaltyAccountRepository.findByCustomerId(customer.getId())
-                .map(acc -> acc.getPointBalance())
-                .orElse(0L);
+                Long currentBalance = 0L;
+                if (customer != null) {
+                        currentBalance = loyaltyAccountRepository.findByCustomerId(customer.getId())
+                                        .map(acc -> acc.getPointBalance())
+                                        .orElse(0L);
+                }
 
-        MockPosCheckoutResponse response = MockPosCheckoutResponse.builder()
-                .posDeviceId(request.getPosDeviceId())
-                .storeCode(store.getStoreCode())
-                .transactionCode(txResponse.getTransactionCode())
-                .customerCode(customer.getCustomerCode())
-                .customerName(customer.getFullName())
-                .totalAmount(txResponse.getTotalAmount())
-                .pointsEarned(txResponse.getPointsEarned() != null ? txResponse.getPointsEarned() : 0L)
-                .newPointBalance(currentBalance)
-                .isDuplicatePosTransaction(txResponse.getIsDuplicateRequest())
-                .timestamp(LocalDateTime.now())
-                .items(txResponse.getItems())
-                .build();
+                MockPosCheckoutResponse response = MockPosCheckoutResponse.builder()
+                                .posDeviceId(request.getPosDeviceId())
+                                .storeCode(store.getStoreCode())
+                                .transactionCode(txResponse.getTransactionCode())
+                                .customerCode(customer != null ? customer.getCustomerCode() : null)
+                                .customerName(customer != null ? customer.getFullName() : "Khách lẻ")
+                                .subtotalAmount(txResponse.getSubtotalAmount())
+                                .discountAmount(txResponse.getDiscountAmount())
+                                .pointsRedeemed(txResponse.getPointsRedeemed())
+                                .totalAmount(txResponse.getTotalAmount())
+                                .pointsEarned(txResponse.getPointsEarned() != null ? txResponse.getPointsEarned() : 0L)
+                                .newPointBalance(currentBalance)
+                                .isDuplicatePosTransaction(txResponse.getIsDuplicateRequest())
+                                .timestamp(LocalDateTime.now())
+                                .items(txResponse.getItems())
+                                .build();
 
-        HttpStatus status = Boolean.TRUE.equals(txResponse.getIsDuplicateRequest()) ? HttpStatus.OK : HttpStatus.CREATED;
-        String message = Boolean.TRUE.equals(txResponse.getIsDuplicateRequest())
-                ? "POS Transaction already processed (BR-05 Idempotent)."
-                : "POS Checkout processed successfully and loyalty points calculated.";
+                HttpStatus status = Boolean.TRUE.equals(txResponse.getIsDuplicateRequest()) ? HttpStatus.OK
+                                : HttpStatus.CREATED;
+                String message = Boolean.TRUE.equals(txResponse.getIsDuplicateRequest())
+                                ? "POS Transaction already processed (BR-05 Idempotent)."
+                                : "POS Checkout processed successfully and loyalty points calculated.";
 
-        return ResponseEntity.status(status).body(ApiResponse.success(message, response));
-    }
+                return ResponseEntity.status(status).body(ApiResponse.success(message, response));
+        }
 }

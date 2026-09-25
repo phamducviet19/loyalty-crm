@@ -29,6 +29,9 @@ public class TransactionResponse {
     private String storeName;
 
     private LocalDateTime transactionDate;
+    private BigDecimal subtotalAmount;
+    private BigDecimal discountAmount;
+    private Long pointsRedeemed;
     private BigDecimal totalAmount;
     private TransactionStatus status;
     private LocalDateTime createdAt;

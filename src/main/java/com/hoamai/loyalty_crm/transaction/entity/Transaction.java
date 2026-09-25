@@ -13,13 +13,10 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(
-    name = "transactions",
-    indexes = {
+@Table(name = "transactions", indexes = {
         @Index(name = "idx_transactions_customer_date", columnList = "customer_id, transaction_date DESC"),
         @Index(name = "idx_transactions_store_date", columnList = "store_id, transaction_date DESC")
-    }
-)
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -48,6 +45,14 @@ public class Transaction {
     @Column(name = "total_amount", nullable = false, precision = 18, scale = 2)
     @Builder.Default
     private BigDecimal totalAmount = BigDecimal.ZERO;
+
+    @Column(name = "discount_amount", precision = 18, scale = 2)
+    @Builder.Default
+    private BigDecimal discountAmount = BigDecimal.ZERO;
+
+    @Column(name = "points_redeemed")
+    @Builder.Default
+    private Long pointsRedeemed = 0L;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)

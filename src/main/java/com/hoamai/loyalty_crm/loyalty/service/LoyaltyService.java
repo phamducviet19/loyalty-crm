@@ -15,6 +15,8 @@ public interface LoyaltyService {
 
     PointTransaction earnPointsForTransaction(Transaction transaction);
 
+    PointTransaction redeemPointsForTransaction(com.hoamai.loyalty_crm.customer.entity.Customer customer, Transaction transaction, Long pointsToRedeem);
+
     PointTransactionResponse adjustPoints(AdjustPointRequest request);
 
     LoyaltyAccountDetailResponse getLoyaltyAccountDetail(UUID customerId);

@@ -13,7 +13,6 @@ import lombok.NoArgsConstructor;
 @Builder
 public class CreateStoreRequest {
 
-    @NotBlank(message = "Store code is required")
     @Size(max = 30, message = "Store code must not exceed 30 characters")
     private String storeCode;
 

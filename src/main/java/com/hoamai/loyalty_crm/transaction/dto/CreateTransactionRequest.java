@@ -21,15 +21,15 @@ import java.util.UUID;
 @Builder
 public class CreateTransactionRequest {
 
-    @NotBlank(message = "Transaction code (Idempotency Key) is required")
     @Size(max = 100, message = "Transaction code must not exceed 100 characters")
     private String transactionCode;
 
-    @NotNull(message = "Customer ID is required")
     private UUID customerId;
 
     @NotNull(message = "Store ID is required")
     private UUID storeId;
+
+    private Long pointsToRedeem;
 
     private LocalDateTime transactionDate;
 

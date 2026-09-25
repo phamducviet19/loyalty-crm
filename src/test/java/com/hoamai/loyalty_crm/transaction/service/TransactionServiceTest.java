@@ -32,103 +32,137 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class TransactionServiceTest {
 
-    @Mock
-    private TransactionRepository transactionRepository;
+        @Mock
+        private TransactionRepository transactionRepository;
 
-    @Mock
-    private CustomerRepository customerRepository;
+        @Mock
+        private CustomerRepository customerRepository;
 
-    @Mock
-    private StoreRepository storeRepository;
+        @Mock
+        private StoreRepository storeRepository;
 
-    @Mock
-    private LoyaltyService loyaltyService;
+        @Mock
+        private LoyaltyService loyaltyService;
 
-    @InjectMocks
-    private TransactionServiceImpl transactionService;
+        @InjectMocks
+        private TransactionServiceImpl transactionService;
 
-    private Customer customer;
-    private Store store;
+        private Customer customer;
+        private Store store;
 
-    @BeforeEach
-    void setUp() {
-        customer = Customer.builder()
-                .id(UUID.randomUUID())
-                .customerCode("CUST-001")
-                .fullName("Customer One")
-                .build();
+        @BeforeEach
+        void setUp() {
+                customer = Customer.builder()
+                                .id(UUID.randomUUID())
+                                .customerCode("CUST-001")
+                                .fullName("Customer One")
+                                .build();
 
-        store = Store.builder()
-                .id(UUID.randomUUID())
-                .storeCode("STORE-001")
-                .storeName("Main Store")
-                .build();
-    }
+                store = Store.builder()
+                                .id(UUID.randomUUID())
+                                .storeCode("STORE-001")
+                                .storeName("Main Store")
+                                .build();
+        }
 
-    @Test
-    void createTransaction_success() {
-        CreateTransactionItemRequest item = CreateTransactionItemRequest.builder()
-                .productCode("PROD-1")
-                .productName("Product 1")
-                .quantity(2)
-                .unitPrice(new BigDecimal("100000"))
-                .build();
+        @Test
+        void createTransaction_success() {
+                CreateTransactionItemRequest item = CreateTransactionItemRequest.builder()
+                                .productCode("PROD-1")
+                                .productName("Product 1")
+                                .quantity(2)
+                                .unitPrice(new BigDecimal("100000"))
+                                .build();
 
-        CreateTransactionRequest request = CreateTransactionRequest.builder()
-                .transactionCode("POS-TX-001")
-                .customerId(customer.getId())
-                .storeId(store.getId())
-                .items(List.of(item))
-                .build();
+                CreateTransactionRequest request = CreateTransactionRequest.builder()
+                                .transactionCode("POS-TX-001")
+                                .customerId(customer.getId())
+                                .storeId(store.getId())
+                                .items(List.of(item))
+                                .build();
 
-        when(transactionRepository.findByTransactionCode("POS-TX-001")).thenReturn(Optional.empty());
-        when(customerRepository.findById(customer.getId())).thenReturn(Optional.of(customer));
-        when(storeRepository.findById(store.getId())).thenReturn(Optional.of(store));
-        when(transactionRepository.save(any(Transaction.class))).thenAnswer(i -> {
-            Transaction tx = i.getArgument(0);
-            tx.setId(UUID.randomUUID());
-            return tx;
-        });
+                when(transactionRepository.findByTransactionCode("POS-TX-001")).thenReturn(Optional.empty());
+                when(customerRepository.findById(customer.getId())).thenReturn(Optional.of(customer));
+                when(storeRepository.findById(store.getId())).thenReturn(Optional.of(store));
+                when(transactionRepository.save(any(Transaction.class))).thenAnswer(i -> {
+                        Transaction tx = i.getArgument(0);
+                        tx.setId(UUID.randomUUID());
+                        return tx;
+                });
 
-        PointTransaction pointTx = PointTransaction.builder().points(20L).build();
-        when(loyaltyService.earnPointsForTransaction(any(Transaction.class))).thenReturn(pointTx);
+                PointTransaction pointTx = PointTransaction.builder().points(20L).build();
+                when(loyaltyService.earnPointsForTransaction(any(Transaction.class))).thenReturn(pointTx);
 
-        TransactionResponse response = transactionService.createTransaction(request);
+                TransactionResponse response = transactionService.createTransaction(request);
 
-        assertNotNull(response);
-        assertEquals("POS-TX-001", response.getTransactionCode());
-        assertEquals(new BigDecimal("200000"), response.getTotalAmount());
-        assertEquals(20L, response.getPointsEarned());
-        assertFalse(response.getIsDuplicateRequest());
-        verify(loyaltyService, times(1)).earnPointsForTransaction(any(Transaction.class));
-    }
+                assertNotNull(response);
+                assertEquals("POS-TX-001", response.getTransactionCode());
+                assertEquals(new BigDecimal("200000"), response.getTotalAmount());
+                assertEquals(20L, response.getPointsEarned());
+                assertFalse(response.getIsDuplicateRequest());
+                verify(loyaltyService, times(1)).earnPointsForTransaction(any(Transaction.class));
+        }
 
-    @Test
-    void createTransaction_idempotencyDuplicate_returnsExistingWithoutReEarning() {
-        Transaction existingTx = Transaction.builder()
-                .id(UUID.randomUUID())
-                .transactionCode("POS-TX-001")
-                .customer(customer)
-                .store(store)
-                .totalAmount(new BigDecimal("200000"))
-                .status(TransactionStatus.SUCCESS)
-                .items(Collections.emptyList())
-                .build();
+        @Test
+        void createTransaction_idempotencyDuplicate_returnsExistingWithoutReEarning() {
+                Transaction existingTx = Transaction.builder()
+                                .id(UUID.randomUUID())
+                                .transactionCode("POS-TX-001")
+                                .customer(customer)
+                                .store(store)
+                                .totalAmount(new BigDecimal("200000"))
+                                .status(TransactionStatus.SUCCESS)
+                                .items(Collections.emptyList())
+                                .build();
 
-        CreateTransactionRequest request = CreateTransactionRequest.builder()
-                .transactionCode("POS-TX-001")
-                .customerId(customer.getId())
-                .storeId(store.getId())
-                .build();
+                CreateTransactionRequest request = CreateTransactionRequest.builder()
+                                .transactionCode("POS-TX-001")
+                                .customerId(customer.getId())
+                                .storeId(store.getId())
+                                .build();
 
-        when(transactionRepository.findByTransactionCode("POS-TX-001")).thenReturn(Optional.of(existingTx));
+                when(transactionRepository.findByTransactionCode("POS-TX-001")).thenReturn(Optional.of(existingTx));
 
-        TransactionResponse response = transactionService.createTransaction(request);
+                TransactionResponse response = transactionService.createTransaction(request);
 
-        assertNotNull(response);
-        assertEquals("POS-TX-001", response.getTransactionCode());
-        assertTrue(response.getIsDuplicateRequest());
-        verify(transactionRepository, never()).save(any());
-        verify(loyaltyService, never()).earnPointsForTransaction(any());
-    }
+                assertNotNull(response);
+                assertEquals("POS-TX-001", response.getTransactionCode());
+                assertTrue(response.getIsDuplicateRequest());
+                verify(transactionRepository, never()).save(any());
+                verify(loyaltyService, never()).earnPointsForTransaction(any());
+        }
+
+        @Test
+        void createTransaction_withNullCodes_autoGeneratesCodes() {
+                CreateTransactionItemRequest item = CreateTransactionItemRequest.builder()
+                                .productCode(null)
+                                .productName("Item Without Code")
+                                .quantity(1)
+                                .unitPrice(new BigDecimal("50000"))
+                                .build();
+
+                CreateTransactionRequest request = CreateTransactionRequest.builder()
+                                .transactionCode(null)
+                                .customerId(customer.getId())
+                                .storeId(store.getId())
+                                .items(List.of(item))
+                                .build();
+
+                when(customerRepository.findById(customer.getId())).thenReturn(Optional.of(customer));
+                when(storeRepository.findById(store.getId())).thenReturn(Optional.of(store));
+                when(transactionRepository.existsByTransactionCode(anyString())).thenReturn(false);
+                when(transactionRepository.save(any(Transaction.class))).thenAnswer(i -> {
+                        Transaction tx = i.getArgument(0);
+                        tx.setId(UUID.randomUUID());
+                        return tx;
+                });
+
+                TransactionResponse response = transactionService.createTransaction(request);
+
+                assertNotNull(response);
+                assertNotNull(response.getTransactionCode());
+                assertTrue(response.getTransactionCode().startsWith("TX-"));
+                assertEquals(1, response.getItems().size());
+                assertTrue(response.getItems().get(0).getProductCode().startsWith("PROD-"));
+        }
 }

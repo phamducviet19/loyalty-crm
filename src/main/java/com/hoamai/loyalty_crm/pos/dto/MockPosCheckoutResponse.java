@@ -21,6 +21,9 @@ public class MockPosCheckoutResponse {
     private String transactionCode;
     private String customerCode;
     private String customerName;
+    private BigDecimal subtotalAmount;
+    private BigDecimal discountAmount;
+    private Long pointsRedeemed;
     private BigDecimal totalAmount;
     private Long pointsEarned;
     private Long newPointBalance;

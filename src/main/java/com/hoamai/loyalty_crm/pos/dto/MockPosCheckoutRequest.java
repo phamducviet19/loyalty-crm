@@ -26,6 +26,8 @@ public class MockPosCheckoutRequest {
 
     private String customerPhoneOrCode;
 
+    private Long pointsToRedeem;
+
     @NotBlank(message = "POS Transaction ID (Idempotency Key) is required")
     private String posTransactionId;
 

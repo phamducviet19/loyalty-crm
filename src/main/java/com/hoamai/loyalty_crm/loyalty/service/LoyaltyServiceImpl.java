@@ -13,13 +13,19 @@ import com.hoamai.loyalty_crm.loyalty.entity.PointTransactionType;
 import com.hoamai.loyalty_crm.loyalty.repository.LoyaltyAccountRepository;
 import com.hoamai.loyalty_crm.loyalty.repository.PointTransactionRepository;
 import com.hoamai.loyalty_crm.transaction.entity.Transaction;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -78,16 +84,49 @@ public class LoyaltyServiceImpl implements LoyaltyService {
 
     @Override
     @Transactional
-    public PointTransactionResponse adjustPoints(AdjustPointRequest request) {
-        Customer customer = customerRepository.findById(request.getCustomerId())
-                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + request.getCustomerId()));
+    public PointTransaction redeemPointsForTransaction(Customer customer, Transaction transaction, Long pointsToRedeem) {
+        if (customer == null || pointsToRedeem == null || pointsToRedeem <= 0) {
+            return null;
+        }
 
         LoyaltyAccount loyaltyAccount = loyaltyAccountRepository.findByCustomerId(customer.getId())
-                .orElseThrow(() -> new ResourceNotFoundException("Loyalty account not found for customer id: " + request.getCustomerId()));
+                .orElseThrow(() -> new ResourceNotFoundException("Loyalty account not found for customer id: " + customer.getId()));
+
+        if (loyaltyAccount.getPointBalance() < pointsToRedeem) {
+            throw new IllegalArgumentException("Insufficient point balance. Current: "
+                    + loyaltyAccount.getPointBalance() + ", Requested: " + pointsToRedeem);
+        }
+
+        // Deduct points
+        loyaltyAccount.setPointBalance(loyaltyAccount.getPointBalance() - pointsToRedeem);
+        loyaltyAccountRepository.save(loyaltyAccount);
+
+        PointTransaction pointTransaction = PointTransaction.builder()
+                .customer(customer)
+                .transaction(transaction)
+                .type(PointTransactionType.REDEEM)
+                .points(-pointsToRedeem)
+                .description("Redeem points for transaction " + transaction.getTransactionCode())
+                .build();
+
+        return pointTransactionRepository.save(pointTransaction);
+    }
+
+    @Override
+    @Transactional
+    public PointTransactionResponse adjustPoints(AdjustPointRequest request) {
+        Customer customer = customerRepository.findById(request.getCustomerId())
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Customer not found with id: " + request.getCustomerId()));
+
+        LoyaltyAccount loyaltyAccount = loyaltyAccountRepository.findByCustomerId(customer.getId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Loyalty account not found for customer id: " + request.getCustomerId()));
 
         long updatedBalance = loyaltyAccount.getPointBalance() + request.getPoints();
         if (updatedBalance < 0) {
-            throw new IllegalArgumentException("Insufficient point balance. Current: " + loyaltyAccount.getPointBalance() + ", Adjustment: " + request.getPoints());
+            throw new IllegalArgumentException("Insufficient point balance. Current: "
+                    + loyaltyAccount.getPointBalance() + ", Adjustment: " + request.getPoints());
         }
 
         loyaltyAccount.setPointBalance(updatedBalance);
@@ -110,7 +149,8 @@ public class LoyaltyServiceImpl implements LoyaltyService {
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + customerId));
 
         LoyaltyAccount loyaltyAccount = loyaltyAccountRepository.findByCustomerId(customerId)
-                .orElseThrow(() -> new ResourceNotFoundException("Loyalty account not found for customer id: " + customerId));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Loyalty account not found for customer id: " + customerId));
 
         long currentPoints = loyaltyAccount.getPointBalance();
         LoyaltyTier currentTier = LoyaltyTier.fromPoints(currentPoints);
@@ -134,13 +174,29 @@ public class LoyaltyServiceImpl implements LoyaltyService {
     }
 
     @Override
-    public Page<PointTransactionResponse> getPointHistory(UUID customerId, PointTransactionType type, Pageable pageable) {
+    public Page<PointTransactionResponse> getPointHistory(UUID customerId, PointTransactionType type,
+            Pageable pageable) {
         if (customerId != null && !customerRepository.existsById(customerId)) {
             throw new ResourceNotFoundException("Customer not found with id: " + customerId);
         }
 
-        return pointTransactionRepository.findPointTransactions(customerId, type, pageable)
-                .map(this::mapToPointTransactionResponse);
+        Specification<PointTransaction> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (customerId != null) {
+                predicates.add(cb.equal(root.get("customer").get("id"), customerId));
+            }
+            if (type != null) {
+                predicates.add(cb.equal(root.get("type"), type));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        Pageable pageableWithSort = PageRequest.of(
+                pageable.getPageNumber(),
+                pageable.getPageSize(),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        return pointTransactionRepository.findAll(spec, pageableWithSort).map(this::mapToPointTransactionResponse);
     }
 
     private PointTransactionResponse mapToPointTransactionResponse(PointTransaction pt) {

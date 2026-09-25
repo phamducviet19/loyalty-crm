@@ -17,7 +17,6 @@ import java.math.BigDecimal;
 @Builder
 public class CreateTransactionItemRequest {
 
-    @NotBlank(message = "Product code is required")
     @Size(max = 50, message = "Product code must not exceed 50 characters")
     private String productCode;
 
